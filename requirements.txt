@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+langchain
+langchain_community
+chromadb
+PyPDF2
+ollama
+python-multipart
+pydantic
+tqdm
+streamlit
+requests
+python-dotenv
