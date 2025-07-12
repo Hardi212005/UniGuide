@@ -1,45 +1,27 @@
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from backend.utils.croma_db import get_retriever
-from backend.config import CHROMA_DB_PATH
-from langchain_community.llms import Ollama
-from langchain.chains import RetrievalQA
+from backend.utils.croma_db import create_retriever, create_chain
 
 router = APIRouter()
 
 @router.get("/query/")
 async def query_answer(question: str = Query(...), category: str = Query(None)):
     """
-    Given a question and optional category, return answer using RAG.
+    Answer a question strictly using uploaded documents (category-specific if provided).
+    If relevant context is not found, responds with a default fallback message.
     """
     try:
-        # 1. Load retriever
-        retriever = get_retriever(CHROMA_DB_PATH, category)
+        # Step 1: Create retriever and LLM
+        retriever, llm = create_retriever(category)
 
-        # 2. Load Ollama LLM (Make sure Ollama is running)
-        llm = Ollama(model="llama3.2:3b")  # Or whatever model you have loaded
+        # Step 2: Create strict RAG chain
+        chain = create_chain(retriever, llm)
 
-        # 3. RetrievalQA chain
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=retriever,
-            return_source_documents=True
-        )
+        # Step 3: Run the chain with user's question
+        answer = chain.invoke(question)
 
-        # 4. Run the chain
-        result = qa_chain.invoke({"query": question})
-        answer = result["result"]
-        sources = [
-            {
-                "source": doc.metadata.get("source"),
-                "category": doc.metadata.get("category"),
-                "snippet": doc.page_content[:200]
-            }
-            for doc in result["source_documents"]
-        ]
-
-        return JSONResponse(content={"answer": answer, "sources": sources})
+        return JSONResponse(content={"answer": answer})
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

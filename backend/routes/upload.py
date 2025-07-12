@@ -1,10 +1,10 @@
 import os
 from typing import List
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
-from backend.utils.pdf_loader import extract_text_from_pdf
-from backend.utils.embedding import store_pdf_text
+from backend.utils.pdf_loader import load_pdf_as_documents
+from backend.utils.embedding import embed_and_store_documents
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ async def upload_pdfs(
     category: str = Form(...)
 ):
     """
-    Upload multiple PDFs to a category and store them in ChromaDB with metadata.
+    Upload PDFs to a given category and store embedded chunks in ChromaDB.
     """
     category_dir = os.path.join(BASE_UPLOAD_DIR, category)
     os.makedirs(category_dir, exist_ok=True)
@@ -32,22 +32,16 @@ async def upload_pdfs(
             continue
 
         try:
-            # Save PDF to category-specific directory
+            # Save PDF to disk
             file_path = os.path.join(category_dir, file.filename)
             with open(file_path, "wb") as f:
                 f.write(await file.read())
 
-            # Extract text from PDF
-            text = extract_text_from_pdf(file_path)
+            # Load and parse the PDF with metadata
+            documents = load_pdf_as_documents(file_path, category)
 
-            # Add metadata: file name and category
-            metadata = {
-                "file_name": file.filename,
-                "category": category
-            }
-
-            # Store with metadata
-            store_pdf_text(text=text, file_name=file.filename, category=category, metadata=metadata)
+            # Store documents in ChromaDB
+            embed_and_store_documents(documents)
 
         except Exception as e:
             failed_files.append({
